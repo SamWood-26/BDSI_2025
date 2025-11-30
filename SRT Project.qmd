@@ -1,0 +1,1238 @@
+---
+title: "SRT Project"
+author: "Sam"
+format: html
+editor: visual
+---
+
+# Do **differentially expressed genes (DEGs)** between prefrontal cortex layers change depending on the AD stage?
+
+```{r}
+# packages used
+library(ggplot2)
+library(Matrix)
+library(tidyr)
+library(scatterpie)
+library(viridis)
+library(dplyr)
+library(tibble)
+library(foreach)
+library(doParallel)
+library("viridis")
+# Load the data 
+cluster_path <- "/home/bdsi2025/Genomics/Data/SRT project"
+load((file.path(cluster_path, "project_dat_update.RData.gz")))
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+human_cp <- c(
+  "WM1" = "#64BCDB", "WM2" = "#62A7D7", "WM3" = "#99C8D7",
+  "L1" = "#8B3D5A", "L2/3" = "#E7BDE1", "L3/4" = "#E6A4CD",
+  "L3/4/5" = "#CF8BA3", "L5/6" = "#9E6D7F", "L6b" = "#CDAEB9"
+)
+```
+
+```{r}
+
+test <- spatial_count$`Oct_2021_8-AD_DS-F-47`["OR4F5",]
+coords_df <- as.data.frame(spatial_location$`Oct_2021_8-AD_DS-F-47`)
+coords_df <- as.data.frame(spatial_location$`Oct_2021_8-AD_DS-F-47`)
+F_64_meta <- (as.data.frame(meta_list$`Oct_2021_8-AD_DS-F-47`))
+test_f_64 <- cbind(F_64_meta, coords_df)
+```
+
+```{r}
+as.data.frame(test_f_64) %>%
+  ggplot() +
+  aes(x = x, y = y, color = annotation) +
+  geom_point(size = 2.0) +
+  scale_color_manual(values = human_cp)
+```
+
+```{r}
+# For Loop stuff
+spatial_names <- names(spatial_count)
+plot_list <- list()
+
+for (x in spatial_names) {
+  print(x)
+  coords_df <- as.data.frame(spatial_location[[x]])
+  meta <- (as.data.frame(meta_list[[x]]))
+  graph <- cbind(meta, coords_df)
+  
+  p <- as.data.frame(graph) %>%
+    ggplot() +
+    aes(x = x, y = y, color = annotation) +
+    geom_point(size = 3) +
+    labs(title = x) +
+    scale_color_manual(values = human_cp)
+  plot_list[[x]] <- p
+  print(p)
+}
+```
+
+```{r}
+plot_list[[1]]
+```
+
+```{r}
+test <- spatial_count$`Oct_2021_8-AD_DS-F-47`["OR4F5",]
+coords_df <- as.data.frame(spatial_location$`Oct_2021_8-AD_DS-F-47`)
+test_g <- cbind(test, coords_df)
+
+as.data.frame(test_g) %>%
+  ggplot() +
+  aes(x = x, y = y, color = test) +
+  geom_point(size = 2.0)
+```
+
+```{r}
+#install.packages('devtools')
+#devtools::install_github('xzhoulab/SPARK')
+library(SPARK)
+```
+
+```{r}
+# devtools::install_github('YMa-lab/CARD')
+library(CARD)
+```
+
+```{r}
+row_names <- rownames(spatial_count$`Oct_2021_1-Control-F-74`)
+spatial_names <- names(spatial_count)
+
+for (x in spatial_names) {
+  current_val <- rownames(spatial_count[[x]])
+  checker <- all(row_names != current_val)
+  if (checker) {
+    print(x)
+    print("is different")
+  }
+  
+}
+```
+
+```{r}
+spatial_names <- names(spatial_count)
+exp_per_sample <- list()
+
+for (x in spatial_names) {
+  y <- spatial_count[[x]]
+  row_sums <- rowSums(y)
+  exp_per_sample[[x]] <- row_sums  
+}
+exp_df <- as.data.frame(exp_per_sample)
+head(exp_df)
+```
+
+```{r}
+zero_rows <- exp_df %>% 
+  mutate(row_sums =rowSums(.)) %>% 
+  filter(row_sums == 0)
+
+zero_names <- rownames(zero_rows)
+```
+
+```{r}
+exp_df_noZeros <- exp_df %>% 
+  mutate(row_sums = rowSums(.)) %>% 
+  filter(row_sums != 0) %>% 
+  select(-row_sums)
+```
+
+```{r}
+control_nonZeros_l <- list()
+control_index <- which(grepl("Control", names(exp_df_noZeros)))
+n <- 1
+for (x in control_index) {
+  row_to_add <- exp_df_noZeros[x]
+  control_nonZeros_l[[n]] <-row_to_add
+  n <- n + 1
+}
+
+control_nonZero <- as.data.frame(control_nonZeros_l)
+
+early_nonZeros_l <- list()
+early_index <- which(grepl("early", names(exp_df_noZeros)))
+n <- 1
+for (x in early_index) {
+  row_to_add <- exp_df_noZeros[x]
+  early_nonZeros_l[[n]] <-row_to_add
+  n <- n + 1
+}
+
+early_nonZero <- as.data.frame(early_nonZeros_l)
+
+
+AD_nonZeros_l <- list()
+AD_index <- which(grepl("AD_", names(exp_df_noZeros)))
+n <- 1
+for (x in AD_index) {
+  row_to_add <- exp_df_noZeros[x]
+  AD_nonZeros_l[[n]] <-row_to_add
+  n <- n + 1
+}
+
+AD_nonZero <- as.data.frame(AD_nonZeros_l)
+
+
+DSAD_nonZeros_l <- list()
+DSAD_index <- which(grepl("AD_", names(exp_df_noZeros)))
+n <- 1
+for (x in DSAD_index) {
+  row_to_add <- exp_df_noZeros[x]
+  DSAD_nonZeros_l[[n]] <-row_to_add
+  n <- n + 1
+}
+
+DSAD_nonZero <- as.data.frame(AD_nonZeros_l)
+
+con_avg <- control_nonZero %>% 
+  mutate(Con_avg_exp = rowMeans(.)) %>% 
+  select(Con_avg_exp)
+
+early_avg <- early_nonZero %>% 
+  mutate(Early_avg_exp = rowMeans(.)) %>% 
+  select(Early_avg_exp)
+
+AD_avg <- AD_nonZero %>% 
+  mutate(AD_avg_exp = rowMeans(.)) %>% 
+  select(AD_avg_exp)
+
+DSAD_avg <- DSAD_nonZero %>% 
+  mutate(DSAD_avg_exp = rowMeans(.)) %>% 
+  select(DSAD_avg_exp)
+
+avg_exp <- cbind(con_avg, early_avg, AD_avg, DSAD_avg)
+```
+
+```{r}
+# gene_names <- rownames(AD_nonZero)
+# p_vals <- numeric(length(gene_names))
+# 
+# 
+# for (i in seq_along(gene_names)) {
+#   gene <- gene_names[i]
+#   
+#   ad_vals <- as.numeric(AD_nonZero[gene, ])
+#   ctrl_vals <- as.numeric(control_nonZero[gene, ])
+#   dsad_vals <- as.numeric(DSAD_nonZero[gene, ])
+#   early_vals <- as.numeric(early_nonZero[gene, ])
+#   
+#   expression <- c(ad_vals, ctrl_vals, dsad_vals, early_vals)
+#   group <- factor(c(
+#     rep("AD", length(ad_vals)),
+#     rep("Control", length(ctrl_vals)),
+#     rep("DSAD", length(dsad_vals)),
+#     rep("Early", length(early_vals))
+#   ))
+#   
+#   df <- data.frame(expression, group)
+#   fit <- aov(expression ~ group, data = df)
+#   p_vals[i] <- summary(fit)[[1]]$`Pr(>F)`[1]  
+# }
+# 
+# 
+# hochberg_p <- p.adjust(p_vals, method = "hochberg")
+# 
+# 
+# anova_results <- data.frame(
+#   gene = gene_names,
+#   p_value = p_vals,
+#   hochberg_corrected = hochberg_p,
+#   row.names = gene_names
+# )
+```
+
+```{r}
+# sum(anova_results$hochberg_corrected < 0.05)
+```
+
+```{r}
+# gene_names <- rownames(AD_nonZero)
+# kw_pvals <- numeric(length(gene_names))
+# 
+# for (i in seq_along(gene_names)) {
+#   gene <- gene_names[i]
+# 
+#   ad <- as.numeric(AD_nonZero[gene, ])
+#   ctrl <- as.numeric(control_nonZero[gene, ])
+#   dsad <- as.numeric(DSAD_nonZero[gene, ])
+#   early <- as.numeric(early_nonZero[gene, ])
+# 
+#   expr <- c(ad, ctrl, dsad, early)
+#   group <- factor(c(
+#     rep("AD", length(ad)),
+#     rep("Control", length(ctrl)),
+#     rep("DSAD", length(dsad)),
+#     rep("Early", length(early))
+#   ))
+# 
+#   test_result <- kruskal.test(expr ~ group)
+#   kw_pvals[i] <- test_result$p.value
+# }
+# 
+# kw_pvals_adj <- p.adjust(kw_pvals, method = "hochberg")
+# 
+# kw_table <- data.frame(
+#   gene = gene_names,
+#   raw_p_value = kw_pvals,
+#   hochberg_p_value = kw_pvals_adj,
+#   row.names = gene_names
+# )
+# 
+# head(kw_table[order(kw_table$raw_p_value), ])
+```
+
+```{r}
+# Extract matrices
+spatial_mat <- spatial_count$`Oct_2021_8-AD_DS-F-47`
+meta_df <- meta_list$`Oct_2021_8-AD_DS-F-47`
+
+if (!all(colnames(spatial_mat) %in% rownames(meta_df))) {
+  stop("Column names in spatial matrix do not match row names in metadata.")
+}
+
+annotation_row <- meta_df[colnames(spatial_mat), "annotation"]
+```
+
+```{r}
+spatial_cols <- colnames(spatial_count$`Oct_2021_8-AD_DS-F-47`)
+meta_rows <- rownames(meta_list$`Oct_2021_8-AD_DS-F-47`)
+
+non_matching <- setdiff(spatial_cols, meta_rows)
+
+length(non_matching) 
+non_matching          
+```
+
+```{r}
+sample_names <- colnames(exp_df_noZeros)
+
+stage <- character(length(sample_names))
+control_indices <- grepl("Control", sample_names)
+stage[control_indices] <- "Control"
+early_indices <- grepl("early", sample_names)
+stage[early_indices] <- "Early"
+AD_indices <- grepl("AD_", sample_names)
+stage[AD_indices] <- "AD"
+DSAD_indices <- grepl("DSAD", sample_names) 
+stage[DSAD_indices] <- "DSAD"
+stage <- factor(stage)
+library(limma)
+library(edgeR)
+dge <- DGEList(counts = exp_df_noZeros)
+dge <- calcNormFactors(dge)
+design <- model.matrix(~ stage)
+v <- voom(dge, design, plot = TRUE)
+fit <- lmFit(v, design)
+fit <- eBayes(fit)
+topTable(fit, coef = 2, number = Inf, adjust = "BH")
+```
+
+```{r}
+results <- topTable(fit, number = Inf)
+filtered_results <- results %>% 
+  filter(adj.P.Val > 0.05)  
+```
+
+```{r}
+#poisson regression for SVGs
+# cel_expr <- as.numeric(spatial_count["CEL", ])
+# names(cel_expr) <- colnames(spatial_count)
+# 
+# coords_df <- as.data.frame(t(spatial_location))
+# 
+# spatial_location_with_expr <- rbind(coords_df, CEL = cel_expr)
+# spatial_expr_t_cel <- t(spatial_location_with_expr)
+# 
+# as.data.frame(spatial_expr_t_cel) %>% 
+#   ggplot() +
+#   aes(x = x, y = y, fill = CEL) +
+#   geom_tile()
+```
+
+```{r}
+```
+
+```{r}
+# sparkX <- sparkx(spatial_count[[1]],
+#                            spatial_location[[1]],
+#                            numCores=1,
+#                            option="mixture")
+# head(sparkX$res_mtest)
+
+```
+
+```{r}
+
+```
+
+```{r}
+# makes the P val matrix for SVGs
+
+# gene_names <- rownames(spatial_count[[1]])
+# num_genes <- length(gene_names)
+# num_samples <- length(sample_names)
+# 
+# adj_pval_matrix <- matrix(NA, nrow = num_genes, ncol = num_samples)
+# rownames(adj_pval_matrix) <- gene_names
+# colnames(adj_pval_matrix) <- sample_names
+# 
+# for (i in seq_along(sample_names)) {
+#   sample <- sample_names[i]
+#   
+#   counts <- spatial_count[[i]]
+#   coords <- spatial_location[[i]]
+# 
+#   sparkX <- sparkx(counts, coords, numCores = 1, option = "mixture")
+# 
+#   res <- sparkX$res_mtest
+#   sample_pvals <- rep(NA, num_genes)  # initialize with NAs
+#   matched_genes <- intersect(rownames(res), gene_names)
+# 
+#   sample_pvals[match(matched_genes, gene_names)] <- res[matched_genes, "adjustedPval"]
+#   adj_pval_matrix[, i] <- sample_pvals
+# }
+```
+
+```{r}
+# saveRDS(adj_pval_matrix, file = "adj_pval_matrix.rds")
+```
+
+```{r}
+adj_pval_matrix <- readRDS("adj_pval_matrix.rds")
+```
+
+```{r}
+
+```
+
+```{r}
+adj_pval_matrix_clean <- adj_pval_matrix[complete.cases(adj_pval_matrix), ]
+# 15822 by 39
+```
+
+```{r}
+significant_genes <- rownames(adj_pval_matrix_clean)[apply(adj_pval_matrix_clean < 0.05, 1, all)]
+#688 of them
+```
+
+```{r}
+sample_names <- colnames(adj_pval_matrix_clean)
+
+stage <- character(length(sample_names))
+
+DSAD_indices <- grepl("AD_DS|DSAD", sample_names, ignore.case = TRUE)
+stage[DSAD_indices] <- "DSAD"
+
+early_indices <- grepl("earlyAD", sample_names, ignore.case = TRUE)
+stage[early_indices & stage == ""] <- "Early"
+
+AD_indices <- grepl("\\.AD\\.|\\bAD\\b", sample_names, ignore.case = TRUE)
+stage[AD_indices & stage == ""] <- "AD"
+
+control_indices <- grepl("Control", sample_names, ignore.case = TRUE)
+stage[control_indices & stage == ""] <- "Control"
+
+stage <- factor(stage)
+
+sample_stage_df <- data.frame(Sample = sample_names, Group = stage)
+print(sample_stage_df)
+```
+
+```{r}
+sig_gene_sets <- list()
+
+for (grp in levels(stage)) {
+  cols <- which(stage == grp)
+  sig_genes <- rownames(adj_pval_matrix_clean)[apply(adj_pval_matrix_clean[, cols] < 0.05, 1, all)]
+  sig_gene_sets[[grp]] <- sig_genes
+}
+```
+
+```{r}
+group_pairs <- combn(levels(stage), 2, simplify = FALSE)
+
+pairwise_intersections <- list()
+
+for (pair in group_pairs) {
+  group1 <- pair[1]
+  group2 <- pair[2]
+
+  common_genes <- intersect(sig_gene_sets[[group1]], sig_gene_sets[[group2]])
+
+  key <- paste(group1, group2, sep = "_vs_")
+  pairwise_intersections[[key]] <- common_genes
+}
+```
+
+```{r}
+spatial_names <- names(spatial_count)
+plot_list_t <- list()
+
+for (x in spatial_names) {
+  coords_df <- as.data.frame(spatial_location[[x]])
+  meta <- (as.data.frame(spatial_count[[x]]["SDF4",]))
+  colnames(meta) <- "SDF4_Expression"
+  graph <- cbind(meta, coords_df)
+  
+  p <- as.data.frame(graph) %>%
+    ggplot() +
+    aes(x = x, y = y, color = SDF4_Expression) +
+    geom_point(size = 2) 
+  plot_list_t[[x]] <- p
+  print(p)
+}
+```
+
+```{r}
+spatial_names <- names(spatial_count[1])
+plot_list_t <- list()
+
+for (x in spatial_names) {
+  for (y in significant_genes) {
+    coords_df <- as.data.frame(spatial_location[[x]])
+    meta <- (as.data.frame(spatial_count[[x]][y,]))
+    colnames(meta) <- "Expression"
+    graph <- cbind(meta, coords_df)
+  
+    p <- as.data.frame(graph) %>%
+      ggplot() +
+      aes(x = x, y = y, color = Expression) +
+      ggtitle(y) +
+      geom_point(size = 2.5) +
+      scale_color_viridis(option="plasma", direction = -1)
+    plot_list_t[[y]] <- p
+    print(p)
+  }
+}
+# this line will actually save the stuff: plot_list_t[[paste0(x, "_", y)]] <- p
+```
+
+```{r}
+print(p)
+```
+
+```{r}
+# saveRDS(plot_list_t, file = "Oct_2021_1-Control-F-74_plot_list.rds")
+```
+
+```{r}
+# oct_con_F_74 <- readRDS("Oct_2021_1-Control-F-74_plot_list.rds")
+```
+
+# Looking at the DEG Post Spot Normalization
+
+```{r}
+#First Histograms of the expression reads per spot
+column_sums <- colSums(spatial_count$`Oct_2021_1-Control-F-74`)
+column_sums_df <- data.frame(Sum = column_sums)
+
+ggplot(column_sums_df, aes(x = Sum)) +
+  geom_histogram(bins = 100, fill = "skyblue", color = "black") + 
+  labs(title = "Histogram of Expression Per Spot",
+       x = "Reads per Spot",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+```{r}
+sample_names <- names(spatial_count)
+expo_hist_list <- list()
+
+for (x in sample_names) {
+  column_sums <- colSums(spatial_count[[x]])
+  column_sums <- data.frame(Sum = column_sums)
+
+  p <- ggplot(column_sums) + aes(x= Sum) +
+      geom_histogram(bins = 100, fill = "skyblue", color = "black") + 
+      labs(title = paste("Histogram of Expression Per Spot:", x),
+          x = "Reads per Spot",
+          y = "Frequency") +
+      coord_cartesian(ylim = c(0, 500)) +
+      theme_minimal()
+  expo_hist_list[[x]] <- p
+  print(p)
+}
+#facet(by stage) and fix the y axis also try relative shape
+```
+
+```{r}
+# saveRDS(plot_list_t, file = "Oct_2021_1-Control-F-74_plot_list.rds")
+# saveRDS(expo_hist_list, file = "expo_hist_list.rds")
+```
+
+```{r}
+
+sample_names <- names(spatial_count)
+expo_hist_list <- list()
+
+all_counts <- unlist(lapply(sample_names, function(x) colSums(spatial_count[[x]])))
+hist_info <- hist(all_counts, breaks = 100, plot = FALSE)
+y_max <- max(hist_info$counts)
+
+for (x in sample_names) {
+  column_sums <- colSums(spatial_count[[x]])
+  column_sums <- data.frame(Sum = column_sums)
+  
+  p <- ggplot(column_sums, aes(x = Sum)) +
+    geom_histogram(bins = 100, fill = "skyblue", color = "black") +
+    labs(
+      title = paste("Histogram of Expression Per Spot:", x),
+      x = "Reads per Spot",
+      y = "Frequency"
+    ) +
+    coord_cartesian(ylim = c(0, 500)) +
+    theme_minimal()
+  
+  expo_hist_list[[x]] <- p
+  print(p)
+}
+
+
+# install.packages('Seurat')
+# library('Seurat')
+```
+
+```{r}
+total_sum <- 0
+total_count <- 0
+
+for (x in names(spatial_count)) {
+  mat <- spatial_count[[x]]  # should be a dgCMatrix or similar
+  total_sum <- total_sum + sum(mat@x)  # only non-zero elements
+  total_count <- total_count + length(mat)  # total number of entries = nrow * ncol
+}
+
+global_mean <- total_sum / total_count
+cat("Global mean:", global_mean, "\n")
+```
+
+```{r}
+first_sample_name <- names(spatial_count)[6]
+mat <- spatial_count[[first_sample_name]]
+
+# Global mean
+total_sum <- 0
+total_count <- 0
+for (x in names(spatial_count)) {
+  total_sum <- total_sum + sum(spatial_count[[x]]@x)
+  total_count <- total_count + length(spatial_count[[x]])
+}
+global_mean <- total_sum / total_count
+
+n_genes <- nrow(mat)
+n_spots <- ncol(mat)
+norm_columns <- vector("list", n_spots)
+
+for (j in 1:n_spots) {
+  col_vals <- mat[, j]
+  col_mean <- sum(col_vals) / n_genes
+
+  if (col_mean > 0) {
+    scaling_factor <- global_mean / col_mean
+    norm_col <- col_vals * scaling_factor
+  } else {
+    norm_col <- col_vals
+  }
+
+  norm_columns[[j]] <- norm_col
+}
+
+# Manually build sparse matrix
+i_list <- list()
+x_list <- list()
+p <- numeric(n_spots + 1)
+nnz <- 0
+
+for (j in 1:n_spots) {
+  col_vals <- norm_columns[[j]]
+  nonzero_idx <- which(col_vals != 0)
+  values <- col_vals[nonzero_idx]
+
+  i_list[[j]] <- nonzero_idx
+  x_list[[j]] <- values
+  nnz <- nnz + length(values)
+  p[j + 1] <- nnz
+}
+
+norm_mat <- sparseMatrix(
+  i = unlist(i_list),
+  p = p,
+  x = unlist(x_list),
+  dims = dim(mat),
+  dimnames = dimnames(mat),
+  index1 = TRUE
+)
+
+cat("✅ Successfully normalized:", first_sample_name, "\n")
+```
+
+```{r}
+# 3253.799 
+cat("Original total sum:", sum(mat), "\n")
+cat("Normalized total sum:", sum(norm_mat), "\n")
+
+cat("Original mean per column:", mean(colSums(mat)), "\n")
+cat("Normalized mean per column:", mean(colSums(norm_mat)), "\n")
+
+cat("Original column range:", range(colSums(mat)), "\n")
+cat("Normalized column range:", range(colSums(norm_mat)), "\n")
+
+```
+
+```{r}
+cat("First 10 colSums (original):", head(colSums(mat), 10), "\n")
+cat("First 10 colSums (normalized):", head(colSums(norm_mat), 10), "\n")
+```
+
+```{r}
+normalize_sample_matrix <- function(mat, global_mean) {
+  n_genes <- nrow(mat)
+  n_spots <- ncol(mat)
+  norm_columns <- vector("list", n_spots)
+
+  for (j in 1:n_spots) {
+    col_vals <- mat[, j]
+    col_mean <- sum(col_vals) / n_genes
+
+    if (col_mean > 0) {
+      scaling_factor <- global_mean / col_mean
+      norm_col <- col_vals * scaling_factor
+    } else {
+      norm_col <- col_vals
+    }
+
+    norm_columns[[j]] <- norm_col
+  }
+
+  i_list <- list()
+  x_list <- list()
+  p <- numeric(n_spots + 1)
+  nnz <- 0
+
+  for (j in 1:n_spots) {
+    col_vals <- norm_columns[[j]]
+    nonzero_idx <- which(col_vals != 0)
+    values <- col_vals[nonzero_idx]
+
+    i_list[[j]] <- nonzero_idx
+    x_list[[j]] <- values
+    nnz <- nnz + length(values)
+    p[j + 1] <- nnz
+  }
+
+  norm_mat <- sparseMatrix(
+    i = unlist(i_list),
+    p = p,
+    x = unlist(x_list),
+    dims = dim(mat),
+    dimnames = dimnames(mat),
+    index1 = TRUE
+  )
+
+  return(norm_mat)
+}
+```
+
+```{r}
+normalized_spatial_list <- list()
+
+for (x in names(spatial_count)) {
+  cat("Normalizing:", x, "\n")
+  
+  mat <- spatial_count[[x]]
+  norm_mat <- normalize_sample_matrix(mat, global_mean)
+
+  # Create a safe variable name (e.g., "Oct_2021_1_Control_F_74_norm")
+  safe_name <- paste0(gsub("[^[:alnum:]]", "_", x), "_norm")
+
+  # Assign it as a global variable
+  assign(safe_name, norm_mat, envir = .GlobalEnv)
+
+  # Also store in a list for later access
+  normalized_spatial_list[[x]] <- norm_mat
+}
+
+```
+
+```{r}
+norm_names <- ls(pattern = "_norm$")
+
+# Load them into a named list
+normalized_matrix_list <- mget(norm_names)
+```
+
+```{r}
+saveRDS(normalized_matrix_list, file = "all_normalized_matrices.rds")
+```
+
+```{r}
+normalized_matrix_list_t <- readRDS("all_normalized_matrices.rds")
+```
+
+```{r}
+# code to view a given matrix
+# View(as.matrix(normalized_matrix_list_t$Dec_13_2021_Human1_Control_F_64_norm))
+
+gene_sums_list <- lapply(normalized_matrix_list_t, rowSums)
+
+gene_expression_matrix <- do.call(cbind, gene_sums_list)
+
+dim(gene_expression_matrix)
+head(gene_expression_matrix[, 1:5])
+```
+
+```{r}
+sample_names <- colnames(gene_expression_matrix)
+
+stage <- character(length(sample_names))
+
+DSAD_indices <- grepl("AD_DS|DSAD", sample_names, ignore.case = TRUE)
+stage[DSAD_indices] <- "DSAD"
+
+early_indices <- grepl("earlyAD", sample_names, ignore.case = TRUE)
+stage[early_indices & stage == ""] <- "Early"
+
+AD_indices <- grepl("(^|[_\\.-])AD($|[_\\.-])", sample_names, ignore.case = TRUE)
+stage[AD_indices & stage == ""] <- "AD"
+
+control_indices <- grepl("Control", sample_names, ignore.case = TRUE)
+stage[control_indices & stage == ""] <- "Control"
+
+stage <- factor(stage)
+
+sample_stage_df <- data.frame(Sample = sample_names, Group = stage)
+print(sample_stage_df)
+
+table(stage)
+```
+
+```{r}
+library(limma)
+library(edgeR)
+dge <- DGEList(counts = gene_expression_matrix)
+dge <- calcNormFactors(dge)
+design <- model.matrix(~ stage)
+v <- voom(dge, design, plot = TRUE)
+fit <- lmFit(v, design)
+fit <- eBayes(fit)
+topTable(fit, number = Inf, adjust = "BH")
+```
+
+```{r}
+results <- topTable(fit, number = Inf)
+filtered_results <- results %>% 
+  filter(adj.P.Val > 0.05)  
+
+#With DSAD I have 14 significant 
+```
+
+```{r}
+keep_samples <- stage %in% c("AD", "Control", )
+filtered_matrix <- gene_expression_matrix[, keep_samples]
+filtered_stage <- droplevels(stage[keep_samples])
+table(filtered_stage)
+levels(filtered_stage)
+```
+
+```{r}
+dge_3 <- DGEList(counts = filtered_matrix)
+dge_3 <- calcNormFactors(dge_3)
+design_3 <- model.matrix(~ filtered_stage)
+v_3 <- voom(dge_3, design_3, plot = TRUE)
+fit_3 <- lmFit(v_3, design_3)
+fit_3 <- eBayes(fit_3)
+topTable(fit_3, number = Inf, adjust = "BH")
+# Drop more than just the 0s drop if its under x% of expression. look at what others have done for dropping genes
+```
+
+```{r}
+results_3 <- topTable(fit_3, number = Inf)
+filtered_results_3 <- results_3 %>% 
+  filter(adj.P.Val < 0.05)  
+
+sig_results_3 <- results_3 %>% 
+  filter(adj.P.Val < 0.05)
+
+# Optionally, check summary
+summary(decideTests(fit_3))
+#With DSAD I have 14 significant 
+#check male v female within control
+```
+
+```{r}
+spatial_names <- 1
+plot_list_t <- list()
+
+for (x in spatial_names) {
+  for (y in significant_genes) {
+    coords_df <- as.data.frame(spatial_location[[x]])
+    meta <- (as.data.frame(spatial_count[[x]][y,]))
+    colnames(meta) <- "Expression"
+    graph <- cbind(meta, coords_df)
+  
+    p <- as.data.frame(graph) %>%
+      ggplot() +
+      aes(x = x, y = y, color = Expression) +
+      ggtitle(y) +
+      geom_point(size = 2) 
+    plot_list_t[[y]] <- p
+    print(p)
+  }
+}
+```
+
+```{r}
+# MORE GRAPHS
+
+sample_names <- names(spatial_count)
+stage <- character(length(sample_names))
+
+DSAD_indices <- grepl("AD_DS|DSAD", sample_names, ignore.case = TRUE)
+stage[DSAD_indices] <- "DSAD"
+
+early_indices <- grepl("earlyAD", sample_names, ignore.case = TRUE)
+stage[early_indices & stage == ""] <- "Early"
+
+AD_indices <- grepl("(^|[_\\.-])AD($|[_\\.-])", sample_names, ignore.case = TRUE)
+stage[AD_indices & stage == ""] <- "AD"
+
+control_indices <- grepl("Control", sample_names, ignore.case = TRUE)
+stage[control_indices & stage == ""] <- "Control"
+
+stage <- factor(stage)
+sample_stage_df <- data.frame(Sample = sample_names, Stage = stage)
+table(stage)
+print(sample_stage_df)
+```
+
+```{r}
+combined_df <- data.frame()
+
+for (x in sample_names) {
+  column_sums <- colSums(spatial_count[[x]])
+  temp_df <- data.frame(Sample = x, Sum = column_sums)
+  temp_df$Stage <- sample_stage_df$Stage[sample_stage_df$Sample == x]
+  combined_df <- rbind(combined_df, temp_df)
+}
+```
+
+```{r}
+# Global x limit
+x_max <- max(combined_df$Sum)
+
+ggplot(combined_df, aes(x = Sum, fill = Stage)) +
+  geom_histogram(bins = 100, color = "black") +
+  facet_wrap(~ Stage, scales = "fixed") +
+  coord_cartesian(xlim = c(0, x_max), ylim = c(0, 3500)) +
+  labs(
+    title = "Distribution of Expression Per Spot by Stage",
+    x = "Reads per Spot",
+    y = "Frequency"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+
+#CHANGE this to side by side box plot might need to log transform
+```
+
+```{r}
+combined_df$Stage <- factor(combined_df$Stage, levels = c("Control", "Early", "AD", "DSAD"))
+
+ggplot(combined_df, aes(x = log(Sum), fill = Stage)) +
+  facet_wrap(~ Stage) +
+  labs(
+    title = "Distribution of Expression per Spot by Stage",
+    x = "Natural Log of Reads per Spot"
+  ) +
+  geom_boxplot()
+```
+
+```{r}
+ggplot(combined_df, aes(x = Sum, fill = Stage)) +
+  geom_histogram(
+    bins = 100, 
+    position = "identity",
+    alpha = 0.3,            
+    color = "black"
+  ) +
+  coord_cartesian(xlim = c(0, x_max), ylim = c(0, 3500)) +
+  labs(
+    title = "Overlayed Histogram of Expression Per Spot by Stage",
+    x = "Reads per Spot",
+    y = "Frequency"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+#switch it to relative frequency
+```
+
+```{r}
+ggplot(combined_df, aes(x = Sum, fill = Stage)) +
+  geom_histogram(
+    aes(y = after_stat(density)),  # <-- Relative frequency
+    bins = 100, 
+    position = "identity",
+    alpha = 0.3,
+    color = "black"
+  ) +
+  coord_cartesian(xlim = c(0, x_max)) +  # Removed ylim since density values are typically < 1
+  labs(
+    title = "Histogram of Expression Per Spot by Stage (Relative Frequency)",
+    x = "Reads per Spot",
+    y = "Relative Frequency"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+```
+
+```{r}
+library(stringr)
+# Summary stats
+names_df <- as.data.frame(sample_names)
+# 1 = male
+names_df$sex <- c(0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+names_df$age <- as.numeric(str_extract(names_df$sample_names, "\\d{2}$"))
+
+sample_names <- names(spatial_count)
+stage <- character(length(sample_names))
+
+DSAD_indices <- grepl("AD_DS|DSAD", sample_names, ignore.case = TRUE)
+stage[DSAD_indices] <- "DSAD"
+
+early_indices <- grepl("earlyAD", sample_names, ignore.case = TRUE)
+stage[early_indices & stage == ""] <- "Early"
+
+AD_indices <- grepl("(^|[_\\.-])AD($|[_\\.-])", sample_names, ignore.case = TRUE)
+stage[AD_indices & stage == ""] <- "AD"
+
+control_indices <- grepl("Control", sample_names, ignore.case = TRUE)
+stage[control_indices & stage == ""] <- "Control"
+
+stage <- factor(stage)
+sample_stage_df <- data.frame(Sample = sample_names, Stage = stage)
+table(stage)
+print(sample_stage_df)
+
+names_df$stage <- stage
+```
+
+```{r}
+names(stage) <- names(meta_list)
+
+annotation_df <- do.call(rbind, lapply(names(meta_list), function(sample_name) {
+  df <- meta_list[[sample_name]]
+  data.frame(
+    Annotation = df$annotation,  
+    Stage = stage[[sample_name]]
+  )
+}))
+
+count_df <- annotation_df %>%
+  count(Annotation, Stage) %>%
+  group_by(Stage) %>%
+  mutate(RelativeFreq = n / sum(n))
+
+count_df$Stage <- factor(count_df$Stage, levels = c("Control", "Early", "AD", "DSAD"))
+
+# Plot
+ggplot(count_df, aes(x = Annotation, y = RelativeFreq, fill = Stage)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Relative Distribution of Prefrontal Cortex Layers Across Stages",
+    x = "Prefrontal Cortex Clusters ",
+    y = "Relative Frequency"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+names_df %>% 
+  ggplot() +
+  aes(x = age) +
+  geom_histogram(color = "black", bins = 30) +
+  coord_cartesian(xlim = c(40, 100)) +
+  labs(
+    title =  "Age Distribution for all Samples",
+    x = "Age",
+    y = "Frequency"
+  ) + 
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+```
+
+```{r}
+names_df$stage <- factor(names_df$stage, levels = c("Control", "Early", "AD", "DSAD"))
+
+names_df %>% 
+  ggplot() +
+  aes(x = age) +
+  geom_histogram(color = "black", bins = 30) +
+  facet_wrap(~ stage, scales = "fixed") + 
+  coord_cartesian(xlim = c(40, 100)) +
+  labs(
+    title =  "Age Distribution for all Stages",
+    x = "Age",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+names_df %>% 
+  ggplot() +
+  aes(x = sex) +
+  geom_histogram(color = "black", bins = 4) +
+  coord_cartesian(xlim = c(-.5,1.5))
+  labs(
+    title =  "Sex Distribution for all Samples",
+    y = "Frequency"
+  ) + 
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+```
+
+```{r}
+names_df %>% 
+  ggplot() +
+  aes(x = sex) +
+  geom_histogram(color = "black", bins = 4) +
+  facet_wrap(~ stage, scales = "fixed") + 
+  coord_cartesian(xlim = c(-.5, 1.5)) +
+  labs(
+    title =  "Sex Distribution Across all Stages",
+    y = "Frequency",
+    x = "Sex (0 = Female, 1 = Male)"
+  ) +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal()
+```
+
+```{r}
+saveRDS(names_df, file = "demographics_table.rds")
+```
+
+## DEGS ROUND 2 ELETRICBOGALOOOO
+
+```{r}
+library(edgeR)
+```
+
+```{r}
+library(edgeR)
+
+#1.Create DGEList
+#counts = expression data, group = stage(stage is a group vector)
+y <- DGEList(counts = exp_df, group = stage)
+
+#2.Filter lowly expressed genes
+keep <- filterByExpr(y, design = model.matrix(~ 0 + stage))
+y <- y[keep, , keep.lib.sizes = FALSE]
+
+#3.Normalize
+y <- calcNormFactors(y)
+
+#4.Design matrix
+group <- y$samples$group
+design <- model.matrix(~ 0 + group)
+colnames(design) <- levels(group)
+
+#5.Estimate dispersion
+y <- estimateDisp(y, design)
+
+#6.Fit model
+fit <- glmQLFit(y, design)
+
+#7.Define contrasts
+my_contrasts <- makeContrasts(
+  AD_vs_Control = AD - Control,
+  DSAD_vs_Control = DSAD - Control,
+  Early_vs_Control = Early - Control,
+  AD_vs_DSAD = AD - DSAD,
+  Early_vs_AD = Early - AD,
+  Early_vs_DSAD = Early - DSAD,
+  
+  levels = design
+)
+
+#8.Run tests
+results_list <- list()
+for (contrast_name in colnames(my_contrasts)) {
+  lrt <- glmQLFTest(fit, contrast = my_contrasts[, contrast_name])
+  results_list[[contrast_name]] <- topTags(lrt, n = Inf, adjust.method = "BH", sort.by = "PValue")
+}
+
+#Change name to get the comparison you want
+results <- results_list[["Early_vs_DSAD"]]$table
+DEGs <- results[results$FDR < 0.05, ]
+View(results)
+```
+
+```{r}
+
+```
+
+```{r}
+View(results_list[["AD_vs_Control"]]$table)
+```
+
+```{r}
+# DSAD and AD v Control
+
+library(edgeR)
+
+#1.Create DGEList
+#counts = expression data, group = stage(stage is a group vector)
+y <- DGEList(counts = exp_df, group = stage)
+
+#2.Filter lowly expressed genes
+keep <- filterByExpr(y, design = model.matrix(~ 0 + stage))
+y <- y[keep, , keep.lib.sizes = FALSE]
+
+#3.Normalize
+y <- calcNormFactors(y)
+
+#4.Design matrix
+group <- y$samples$group
+design <- model.matrix(~ 0 + group)
+colnames(design) <- levels(group)
+
+#5.Estimate dispersion
+y <- estimateDisp(y, design)
+
+#6.Fit model
+fit <- glmQLFit(y, design)
+
+#7.Define contrasts
+my_contrasts <- makeContrasts(
+  AD_vs_Control = AD - Control,
+  DSAD_vs_Control = DSAD - Control,
+  AD_DSAD_vs_Control = (AD + DSAD) - Control,
+  
+  levels = design
+)
+
+#8.Run tests
+results_list <- list()
+for (contrast_name in colnames(my_contrasts)) {
+  lrt <- glmQLFTest(fit, contrast = my_contrasts[, contrast_name])
+  results_list[[contrast_name]] <- topTags(lrt, n = Inf, adjust.method = "BH", sort.by = "PValue")
+}
+
+#Change name to get the comparison you want
+results <- results_list[["AD_DSAD_vs_Control"]]$table
+DEGs <- results[results$FDR < 0.05, ]
+View(results)
+```

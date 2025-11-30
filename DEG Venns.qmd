@@ -1,0 +1,469 @@
+---
+title: "DEG Venns"
+format: html
+editor: visual
+---
+
+```{r}
+library(ggplot2)
+library(Matrix)
+library(tidyr)
+library(scatterpie)
+library(viridis)
+library(dplyr)
+library(tibble)
+library(VennDiagram)
+cluster_path <- "/home/bdsi2025/Genomics/Shared/DEGs-Final"
+```
+
+```{r}
+# Over all - NONE
+# Con_EarlyAD_all <- readRDS((file.path(cluster_path, "Con-v-EarlyAD_edgeR_use.rds")))
+# Con_AD_all <- readRDS((file.path(cluster_path, "Con-v-LateAD_edgeR_use.rds")))
+```
+
+```{r}
+alpha <- 0.10 
+
+L1_EarlyAD <- readRDS(file.path(cluster_path, "Con-v-EarlyAD.rds"))
+L1_AD <- readRDS(file.path(cluster_path, "Con-v-LateAD_edgeR.rds"))
+
+sig_genes_early <- rownames(L1_EarlyAD)[L1_EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(L1_AD)[L1_AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.10 
+
+L1_EarlyAD <- readRDS(file.path(cluster_path, "Grey_Con-v-Early.rds"))
+L1_AD <- readRDS(file.path(cluster_path, "Grey_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(L1_EarlyAD)[L1_EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(L1_AD)[L1_AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.10 
+
+L1_EarlyAD <- readRDS(file.path(cluster_path, "White_Con-v-Early.rds"))
+L1_AD <- readRDS(file.path(cluster_path, "White_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(L1_EarlyAD)[L1_EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(L1_AD)[L1_AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+# L1
+
+alpha <- 0.10 
+
+L1_EarlyAD <- readRDS(file.path(cluster_path, "L1_Con-v-Early.rds"))
+L1_AD <- readRDS(file.path(cluster_path, "L1_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(L1_EarlyAD)[L1_EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(L1_AD)[L1_AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.05 
+
+L23_EarlyAD <- readRDS(file.path(cluster_path, "L2_3_Con-v-Early.rds"))
+L23_AD <- readRDS(file.path(cluster_path, "L2_3_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(L23_EarlyAD)[L23_EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(L23_AD)[L23_AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.05 
+
+EarlyAD <- readRDS(file.path(cluster_path, "L3_4_5_Con-v-Early.rds"))
+AD <- readRDS(file.path(cluster_path, "L3_4_5_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.05 
+
+EarlyAD <- readRDS(file.path(cluster_path, "L3_4_Con-v-Early.rds"))
+AD <- readRDS(file.path(cluster_path, "L3_4_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (FDR <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.05
+
+EarlyAD <- readRDS(file.path(cluster_path, "L5_6_Con-v-Early.rds"))
+AD <- readRDS(file.path(cluster_path, "L5_6_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.10 
+
+EarlyAD <- readRDS(file.path(cluster_path, "L6b_Con-v-Early.rds"))
+AD <- readRDS(file.path(cluster_path, "L6b_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+
+alpha <- 0.10 
+
+EarlyAD <- readRDS(file.path(cluster_path, "WM1_Con-v-Early.rds"))
+AD <- readRDS(file.path(cluster_path, "WM1_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.10 
+
+EarlyAD <- readRDS(file.path(cluster_path, "WM2_Con-v-Early.rds"))
+AD <- readRDS(file.path(cluster_path, "WM2_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+alpha <- 0.10 
+
+EarlyAD <- readRDS(file.path(cluster_path, "WM3_Con-v-Early.rds"))
+AD <- readRDS(file.path(cluster_path, "WM3_Con-v-LateAD.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (p <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+cluster_path <- "/home/bdsi2025/Genomics/Shared/DEGs-EdgeR"
+```
+
+```{r}
+alpha <- 0.10 
+
+EarlyAD <- readRDS(file.path(cluster_path, "L3_4_Con-v-Early_edgeR_use.rds"))
+AD <- readRDS(file.path(cluster_path, "L3_4_Con-v-LateAD_edgeR_use.rds"))
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$ManuallyAdjPval < alpha]
+sig_genes_ad <- rownames(AD)[AD$ManuallyAdjPval < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (FDR <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```
+
+```{r}
+#Final stuff
+cluster_path <- "/home/bdsi2025/Genomics/Shared/DEG_edgeR (standard!)"
+PIMA_table <- readRDS(file.path(cluster_path, "deg_regional.rds"))
+
+
+alpha <- 0.10 
+
+EarlyAD <- PIMA_table[["L3/4"]][["EarlyAD_vs_Control"]]
+AD <- PIMA_table[["L3/4"]][["LateAD_vs_Control"]] #318
+
+sig_genes_early <- rownames(EarlyAD)[EarlyAD$padj < alpha]
+sig_genes_ad <- rownames(AD)[AD$padj < alpha]
+
+venn_list <- list(EarlyAD = sig_genes_early, LateAD = sig_genes_ad)
+
+venn.plot <- venn.diagram(
+  x = venn_list,
+  filename = NULL,  # to plot to current graphics device
+  fill = c("skyblue", "pink"),
+  alpha = 0.5,
+  cex = 1.5,
+  cat.cex = 1.2,
+  cat.pos = 0,
+  main = paste("Significant Genes (FDR <", alpha, ")")
+)
+
+grid.newpage()
+grid.draw(venn.plot)
+
+intersection_genes <- intersect(sig_genes_early, sig_genes_ad)
+
+cat("Genes significant in both EarlyAD and LateAD:\n")
+print(intersection_genes)
+```

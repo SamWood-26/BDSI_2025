@@ -1,0 +1,466 @@
+---
+title: "EdgeR DEGs"
+format: html
+editor: visual
+---
+
+## EdgeR DEGs
+
+```{r}
+# packages used
+library(ggplot2)
+library(Matrix)
+library(tidyr)
+library(scatterpie)
+library(viridis)
+library(dplyr)
+library(tibble)
+library(foreach)
+library(doParallel)
+# Load the data 
+cluster_path <- "/home/bdsi2025/Genomics/Data/SRT project"
+load((file.path(cluster_path, "project_dat.RData.gz")))
+```
+
+```{r}
+#Code to get list of gene expression matrices, one for each prefrontal cortex region (region_expression is the list output we want).:
+
+#To initialize output list
+region_expression <- list()
+
+#To extract annotations
+all_annotations <- unique(unlist(lapply(meta_list, function(ann) unique(ann[["annotation"]]))))
+
+#Looping through each prefrontal cortex region
+for (region in all_annotations) {
+  sample_expression <- list()  #to collect gene counts for each sample
+  
+  for (sample_name in names(meta_list)) {
+    #To extract current sample
+    spot_ann <- meta_list[[sample_name]]
+    
+    #To get spots for current region
+    region_spots <- rownames(spot_ann)[spot_ann[["annotation"]] == region]
+    
+    #If no spots match this region for this sample, skip to avoid empty columns
+    if (length(region_spots) == 0) next
+    
+    #To extract counts for relevant spots in this sample
+    counts <- spatial_count[[sample_name]][, region_spots, drop = FALSE]
+    
+    #To sum across spots to get total gene expression counts
+    summed_counts <- rowSums(counts)
+    
+    #Adding result to the list with columns named by sample
+    sample_expression[[sample_name]] <- summed_counts
+  }
+  
+  #To combine gene count vectors into matrix, which is added to region_expression list under the particular region name
+  if (length(sample_expression) > 0) {
+    region_matrix <- do.call(cbind, sample_expression)
+    region_expression[[region]] <- region_matrix
+  }
+}
+```
+
+```{r}
+sample_names <- names(spatial_count)
+stage <- character(length(sample_names))
+
+DSAD_indices <- grepl("AD_DS|DSAD", sample_names, ignore.case = TRUE)
+stage[DSAD_indices] <- "DSAD"
+
+early_indices <- grepl("earlyAD", sample_names, ignore.case = TRUE)
+stage[early_indices & stage == ""] <- "Early"
+
+AD_indices <- grepl("(^|[_\\.-])AD($|[_\\.-])", sample_names, ignore.case = TRUE)
+stage[AD_indices & stage == ""] <- "AD"
+
+control_indices <- grepl("Control", sample_names, ignore.case = TRUE)
+stage[control_indices & stage == ""] <- "Control"
+
+stage <- factor(stage)
+sample_stage_df <- data.frame(Sample = sample_names, Stage = stage)
+table(stage)
+print(sample_stage_df)
+```
+
+```{r}
+library(edgeR)
+region_DEG_results <- list()
+
+for (region_name in names(region_expression)) {
+  print(paste("Processing region:", region_name))
+  
+  exp_df <- region_expression[[region_name]]
+  
+  #accounts for the one with only 38
+  common_samples <- intersect(colnames(exp_df), sample_stage_df$Sample)
+  exp_df <- exp_df[, common_samples]
+  stage_vector <- droplevels(stage[match(colnames(exp_df), sample_stage_df$Sample)])
+  
+  
+  #1.Create DGEList
+  matched_samples <- colnames(exp_df)
+  stage_vector <- stage[match(matched_samples, sample_names)]
+  y <- DGEList(counts = exp_df, group = stage_vector)
+  
+  #2.Filter low expressed genes
+  keep <- filterByExpr(y, design = model.matrix(~ 0 + stage_vector))
+  y <- y[keep, , keep.lib.sizes = FALSE]
+  
+  #3.Normalize
+  y <- calcNormFactors(y)
+  
+  #4.Design matrix
+  group <- y$samples$group
+  design <- model.matrix(~ 0 + group)
+  colnames(design) <- levels(group)
+  
+  #5.Estimate dispersion
+  y <- estimateDisp(y, design)
+  
+  #6.Fit model
+  fit <- glmQLFit(y, design)
+  
+  #7.Define contrasts
+  available_groups <- levels(group)
+  
+  contrast_defs <- list(
+    AD_vs_Control = c("AD", "Control"),
+    DSAD_vs_Control = c("DSAD", "Control"),
+    Early_vs_Control = c("Early", "Control"),
+    AD_vs_DSAD = c("AD", "DSAD"),
+    Early_vs_AD = c("Early", "AD"),
+    Early_vs_DSAD = c("Early", "DSAD")
+  )
+  
+  contrast_matrix <- list()
+  for (contrast_name in names(contrast_defs)) {
+    groups <- contrast_defs[[contrast_name]]
+    if (all(groups %in% available_groups)) {
+      contrast <- numeric(length(available_groups))
+      names(contrast) <- available_groups
+      contrast[groups[1]] <- 1
+      contrast[groups[2]] <- -1
+      contrast_matrix[[contrast_name]] <- contrast
+    }
+  }
+  
+  #8.Run tests
+  region_results <- list()
+  for (contrast_name in names(contrast_matrix)) {
+    contrast_vec <- contrast_matrix[[contrast_name]]
+    lrt <- glmQLFTest(fit, contrast = contrast_vec)
+    region_results[[contrast_name]] <- topTags(lrt, n = Inf, adjust.method = "BH", sort.by = "PValue")$table
+  }
+  
+  #Save DEG tables for this region
+  region_DEG_results[[region_name]] <- region_results
+}
+```
+
+```{r}
+# head(region_DEG_results[[2]]["Early_vs_DSAD"])
+
+View(as.data.frame(region_DEG_results[[2]]["AD_vs_Control"]))
+```
+
+```{r}
+# GRAPHS for consistency of the data
+cluster_path <- "/home/bdsi2025/Genomics/Shared/DEGs-for-Methods"
+Con_vs_AD_DESq2 <- readRDS((file.path(cluster_path, "Con_vs_AD_DESq2_new.rds")))
+Con_vs_AD_edgeR <- readRDS((file.path(cluster_path, "Con_vs_AD_edgeR_new.rds")))
+Con_vs_AD_Seurat <- readRDS((file.path(cluster_path, "Con_vs_AD_Seurat_new.rds")))
+
+common_genes <- Reduce(intersect, list(
+  rownames(Con_vs_AD_DESq2),
+  rownames(Con_vs_AD_edgeR),
+  rownames(Con_vs_AD_Seurat)
+))
+
+Con_vs_AD_DESq2_clean <- Con_vs_AD_DESq2[common_genes, , drop = FALSE]
+Con_vs_AD_edgeR_clean <- Con_vs_AD_edgeR[common_genes, , drop = FALSE]
+Con_vs_AD_Seurat_clean <- Con_vs_AD_Seurat[common_genes, , drop = FALSE]
+
+stopifnot(identical(rownames(Con_vs_AD_DESq2_clean), rownames(Con_vs_AD_edgeR_clean)))
+stopifnot(identical(rownames(Con_vs_AD_DESq2_clean), rownames(Con_vs_AD_Seurat_clean)))
+```
+
+```{r}
+plot_df <- data.frame(
+  gene = rownames(Con_vs_AD_DESq2_clean),
+  
+  deseq_logFC = Con_vs_AD_DESq2_clean$log2FoldChange,
+  edger_logFC = Con_vs_AD_edgeR_clean$logFC,
+  seurat_logFC = Con_vs_AD_Seurat_clean$avg_log2FC,
+  
+  deseq_p = Con_vs_AD_DESq2_clean$pvalue,
+  edger_p = Con_vs_AD_edgeR_clean$PValue,
+  seurat_p = Con_vs_AD_Seurat_clean$p_val
+)
+```
+
+```{r}
+ggplot(plot_df, aes(x = edger_logFC, y = deseq_logFC)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Effect Size: edgeR vs DESeq2", x = "edgeR logFC", y = "DESeq2 log2FoldChange")
+
+
+ggplot(plot_df, aes(x = edger_logFC, y = seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Effect Size: edgeR vs Seurat", x = "edgeR logFC", y = "Seurat avg_log2FC")
+
+
+ggplot(plot_df, aes(x = deseq_logFC, y = seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Effect Size: DESeq2 vs Seurat", x = "DESeq2 log2FoldChange", y = "Seurat avg_log2FC")
+```
+
+```{r}
+ggplot(plot_df, aes(x = edger_p, y = deseq_p)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "P-values: edgeR vs DESeq2", x = "edgeR PValue", y = "DESeq2 pvalue")
+
+ggplot(plot_df, aes(x = edger_p, y = seurat_p)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "P-values: edgeR vs Seurat", x = "edgeR PValue", y = "Seurat p_val")
+
+ggplot(plot_df, aes(x = deseq_p, y = seurat_p)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "P-values: DESeq2 vs Seurat", x = "DESeq2 pvalue", y = "Seurat p_val")
+```
+
+```{r}
+ggplot(plot_df, aes(x = -log10(edger_p), y = -log10(deseq_p))) +
+  geom_point(alpha = 0.6) +
+  labs(title = "P-values: edgeR vs DESeq2", x = "-log10(edgeR PValue)", y = "-log10(DESeq2 pvalue)")
+
+ggplot(plot_df, aes(x = -log10(edger_p), y = -log10(seurat_p))) +
+  geom_point(alpha = 0.6) +
+  labs(title = "P-values: edgeR vs Seurat", x = "-log10(edgeR PValue)", y = "-log10(Seurat p_val)")
+
+ggplot(plot_df, aes(x = -log10(deseq_p), y = -log10(seurat_p))) +
+  geom_point(alpha = 0.6) +
+  labs(title = "P-values: DESeq2 vs Seurat", x = "-log10(DESeq2 pvalue)", y = "-log10(Seurat p_val)")
+```
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+
+
+plot_df_1 <- plot_df %>%
+  mutate(
+    edger_logp = -log10(edger_p),
+    deseq_logp = -log10(deseq_p),
+    seurat_logp = -log10(seurat_p)
+  )
+# Calculate Pearson r and R² safely
+r_p1 <- cor(plot_df_1$edger_logp, plot_df_1$deseq_logp, use = "complete.obs")
+r2_p1 <- summary(lm(deseq_logp ~ edger_logp, data = plot_df_1))$r.squared
+
+r_p2 <- cor(plot_df_1$edger_logp, plot_df_1$seurat_logp, use = "complete.obs")
+r2_p2 <- summary(lm(seurat_logp ~ edger_logp, data = plot_df_1))$r.squared
+
+r_p3 <- cor(plot_df_1$deseq_logp, plot_df_1$seurat_logp, use = "complete.obs")
+r2_p3 <- summary(lm(seurat_logp ~ deseq_logp, data = plot_df_1))$r.squared
+
+p1 <- ggplot(plot_df, aes(x = -log10(edger_p), y = -log10(deseq_p))) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p1, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "P-values: edgeR vs DESeq2",
+       x = "-log10(edgeR P-value)",
+       y = "-log10(DESeq2 P-value)") 
+
+p2 <- ggplot(plot_df, aes(x = -log10(edger_p), y = -log10(seurat_p))) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p2, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "P-values: edgeR vs Seurat",
+       x = "-log10(edgeR P-value)",
+       y = "-log10(Seurat P-value)")
+
+p3 <- ggplot(plot_df, aes(x = -log10(deseq_p), y = -log10(seurat_p))) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p3, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "P-values: DESeq2 vs Seurat",
+       x = "-log10(DESeq2 P-value)",
+       y = "-log10(Seurat P-value)")
+
+grid.arrange(p1, p2, p3, ncol = 2)
+```
+
+```{r}
+
+plot_df_1 <- plot_df %>%
+  mutate(
+    edger_FC = edger_logFC,
+    deseq_FC = deseq_logFC,
+    seurat_FC = seurat_logFC
+  )
+# Calculate Pearson r and R² safely
+r_p1 <- cor(plot_df_1$edger_FC, plot_df_1$deseq_FC, use = "complete.obs")
+r2_p1 <- summary(lm(deseq_FC ~ edger_FC, data = plot_df_1))$r.squared
+
+r_p2 <- cor(plot_df_1$edger_FC, plot_df_1$seurat_FC, use = "complete.obs")
+r2_p2 <- summary(lm(seurat_FC ~ edger_FC, data = plot_df_1))$r.squared
+
+r_p3 <- cor(plot_df_1$deseq_FC, plot_df_1$seurat_FC, use = "complete.obs")
+r2_p3 <- summary(lm(seurat_FC ~ deseq_FC, data = plot_df_1))$r.squared
+
+p1 <- ggplot(plot_df, aes(x = edger_logFC, y = deseq_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p1, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: edgeR vs DESeq2",
+       x = "edgeR logFC", y = "DESeq2 logFC")
+
+# Plot 2: edgeR vs Seurat
+p2 <- ggplot(plot_df, aes(x = edger_logFC, y = -seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p2, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: edgeR vs -Seurat",
+       x = "edgeR logFC", y = "-Seurat logFC")
+
+# Plot 3: DESeq2 vs Seurat
+p3 <- ggplot(plot_df, aes(x = deseq_logFC, y = -seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p3, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: DESeq2 vs -Seurat",
+       x = "DESeq2 logFC", y = "-Seurat logFC")
+
+grid.arrange(p1, p2, p3, ncol = 2)
+```
+
+```{r}
+sum(plot_df$edger_p == 0, na.rm = TRUE)
+sum(plot_df$deseq_p == 0, na.rm = TRUE)
+sum(plot_df$seurat_p == 0, na.rm = TRUE)
+```
+
+```{r}
+plot_df_1 <- plot_df %>%
+  mutate(
+    edger_FC = edger_logFC,
+    deseq_FC = deseq_logFC,
+    seurat_FC = seurat_logFC,
+    seurat_invFC = -seurat_logFC
+  )
+
+# Recalculate correlation and R²
+r_p2 <- cor(plot_df_1$edger_FC, plot_df_1$seurat_invFC, use = "complete.obs")
+r2_p2 <- summary(lm(seurat_invFC ~ edger_FC, data = plot_df_1))$r.squared
+
+r_p3 <- cor(plot_df_1$deseq_FC, plot_df_1$seurat_invFC, use = "complete.obs")
+r2_p3 <- summary(lm(seurat_invFC ~ deseq_FC, data = plot_df_1))$r.squared
+
+# Plot 1: edgeR vs Inverse Seurat
+p2 <- ggplot(plot_df, aes(x = edger_logFC, y = -seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p2, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: edgeR vs -Seurat",
+       x = "edgeR logFC", y = "-Seurat logFC")
+
+# Plot 2: DESeq2 vs Inverse Seurat
+p3 <- ggplot(plot_df, aes(x = deseq_logFC, y = -seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p3, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: DESeq2 vs -Seurat",
+       x = "DESeq2 logFC", y = "-Seurat logFC")
+
+# Arrange two plots side by side
+grid.arrange(p2, p3, ncol = 2)
+```
+
+```{r}
+
+
+cluster_path <- "/home/bdsi2025/Genomics/Shared/DEGs-for-Methods"
+Con_vs_AD_DESq2 <- readRDS((file.path(cluster_path, "Con_vs_AD_DESq2_new.rds")))
+Con_vs_AD_edgeR <- readRDS((file.path(cluster_path, "Con_vs_AD_edgeR_new.rds")))
+Con_vs_AD_Seurat <- readRDS((file.path(cluster_path, "Con_vs_AD_Seurat_new.rds")))
+
+common_genes <- Reduce(intersect, list(
+  rownames(Con_vs_AD_DESq2),
+  rownames(Con_vs_AD_edgeR),
+  rownames(Con_vs_AD_Seurat)
+))
+
+Con_vs_AD_DESq2_clean <- Con_vs_AD_DESq2[common_genes, , drop = FALSE]
+Con_vs_AD_edgeR_clean <- Con_vs_AD_edgeR[common_genes, , drop = FALSE]
+Con_vs_AD_Seurat_clean <- Con_vs_AD_Seurat[common_genes, , drop = FALSE]
+
+stopifnot(identical(rownames(Con_vs_AD_DESq2_clean), rownames(Con_vs_AD_edgeR_clean)))
+stopifnot(identical(rownames(Con_vs_AD_DESq2_clean), rownames(Con_vs_AD_Seurat_clean)))
+
+plot_df <- data.frame(
+  gene = rownames(Con_vs_AD_DESq2_clean),
+  
+  deseq_logFC = Con_vs_AD_DESq2_clean$log2FoldChange,
+  edger_logFC = Con_vs_AD_edgeR_clean$logFC,
+  seurat_logFC = Con_vs_AD_Seurat_clean$avg_log2FC,
+  
+  deseq_p = Con_vs_AD_DESq2_clean$pvalue,
+  edger_p = Con_vs_AD_edgeR_clean$PValue,
+  seurat_p = Con_vs_AD_Seurat_clean$p_val
+)
+
+plot_df_1 <- plot_df %>%
+  mutate(
+    edger_FC = edger_logFC,
+    deseq_FC = deseq_logFC,
+    seurat_FC = seurat_logFC
+  )
+
+r_p1 <- cor(plot_df_1$edger_FC, plot_df_1$deseq_FC)
+r2_p1 <- summary(lm(deseq_FC ~ edger_FC, data = plot_df_1))$r.squared
+
+r_p2 <- cor(plot_df_1$edger_FC, plot_df_1$seurat_FC)
+r2_p2 <- summary(lm(seurat_FC ~ edger_FC, data = plot_df_1))$r.squared
+
+r_p3 <- cor(plot_df_1$deseq_FC, plot_df_1$seurat_FC)
+r2_p3 <- summary(lm(seurat_FC ~ deseq_FC, data = plot_df_1))$r.squared
+
+p1 <- ggplot(plot_df, aes(x = edger_logFC, y = deseq_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p1, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: edgeR vs DESeq2",
+       x = "edgeR logFC", y = "DESeq2 logFC")
+
+# Plot 2: edgeR vs Seurat
+p2 <- ggplot(plot_df, aes(x = edger_logFC, y = seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p2, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: edgeR vs Seurat",
+       x = "edgeR logFC", y = "Seurat logFC")
+
+# Plot 3: DESeq2 vs Seurat
+p3 <- ggplot(plot_df, aes(x = deseq_logFC, y = seurat_logFC)) +
+  geom_point(alpha = 0.6) +
+  annotate("text", x = Inf, y = -Inf, label = paste0("R² = ", round(r2_p3, 3)),
+           hjust = 1.1, vjust = -1.2, size = 4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  labs(title = "Effect Size: DESeq2 vs Seurat",
+       x = "DESeq2 logFC", y = "Seurat logFC")
+
+grid.arrange(p1, p2, p3, ncol = 2)
+```

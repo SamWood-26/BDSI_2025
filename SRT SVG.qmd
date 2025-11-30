@@ -1,0 +1,737 @@
+---
+title: "SRT SVG"
+format: html
+editor: visual
+---
+
+## SVG's Detection and Clustering
+
+```{r}
+library(SPARK)
+library(ggplot2)
+library(Matrix)
+library(tidyr)
+library(scatterpie)
+library(viridis)
+library(dplyr)
+library(tibble)
+library(foreach)
+library(doParallel)
+# Load the data 
+cluster_path <- "/home/bdsi2025/Genomics/Data/SRT project"
+load((file.path(cluster_path, "project_dat_update.RData.gz")))
+```
+
+```{r}
+# # Get those SVGs
+# sample_names <- names(spatial_count)
+# all_gene_names <- rownames(spatial_count[[1]])
+# 
+# gene_names <- all_gene_names[!grepl("^MT-", all_gene_names)]
+# num_genes <- length(gene_names)
+# num_samples <- length(sample_names)
+# 
+# adj_pval_matrix <- matrix(NA, nrow = num_genes, ncol = num_samples)
+# rownames(adj_pval_matrix) <- gene_names
+# colnames(adj_pval_matrix) <- sample_names
+# 
+# for (i in seq_along(sample_names)) {
+#   sample <- sample_names[i]
+# 
+#   counts <- spatial_count[[i]]
+#   coords <- spatial_location[[i]]
+# 
+#   sparkX <- sparkx(counts, coords, numCores = 1, option = "mixture")
+#   res <- sparkX$res_mtest
+# 
+#   matched_genes <- intersect(rownames(res), gene_names)
+# 
+#   sample_pvals <- rep(NA, num_genes)
+#   sample_pvals[match(matched_genes, gene_names)] <- res[matched_genes, "adjustedPval"]
+# 
+#   adj_pval_matrix[, i] <- sample_pvals
+# }
+# 
+# adj_pval_matrix_clean <- adj_pval_matrix[complete.cases(adj_pval_matrix), ]
+# 
+# significant_genes <- rownames(adj_pval_matrix_clean)[apply(adj_pval_matrix_clean < 0.05, 1, all)]
+```
+
+```{r}
+# saveRDS(adj_pval_matrix, file = "adj_pval_matrix_new.rds")
+# saveRDS(adj_pval_matrix_clean, file = "adj_pval_matrix_clean_new.rds")
+
+adj_pval_matrix_new <- readRDS("adj_pval_matrix_new.rds")
+adj_pval_matrix_clean_new <- readRDS("adj_pval_matrix_clean_new.rds")
+significant_genes <- rownames(adj_pval_matrix_clean_new)[apply(adj_pval_matrix_clean_new < 0.05, 1, all)]
+```
+
+```{r}
+
+# adj_pval_matrix_old <- readRDS("adj_pval_matrix.rds")
+```
+
+```{r}
+# adj_pval_matrix_clean_old <- adj_pval_matrix_old[complete.cases(adj_pval_matrix_old), ]
+```
+
+```{r}
+# significant_genes_old <- rownames(adj_pval_matrix_clean_old)[apply(adj_pval_matrix_clean_old < 0.05, 1, all)]
+```
+
+```{r}
+sample_names <- colnames(adj_pval_matrix_clean_new)
+
+stage <- character(length(sample_names))
+
+DSAD_indices <- grepl("AD_DS|DSAD", sample_names, ignore.case = TRUE)
+stage[DSAD_indices] <- "DSAD"
+
+early_indices <- grepl("earlyAD", sample_names, ignore.case = TRUE)
+stage[early_indices & stage == ""] <- "Early"
+
+AD_indices <- grepl("\\.AD\\.|\\bAD\\b", sample_names, ignore.case = TRUE)
+stage[AD_indices & stage == ""] <- "AD"
+
+control_indices <- grepl("Control", sample_names, ignore.case = TRUE)
+stage[control_indices & stage == ""] <- "Control"
+
+stage <- factor(stage)
+
+sample_stage_df <- data.frame(Sample = sample_names, Group = stage)
+print(sample_stage_df)
+table(stage)
+```
+
+```{r}
+sig_gene_sets <- list()
+
+for (grp in levels(stage)) {
+  cols <- which(stage == grp)
+  sig_genes <- rownames(adj_pval_matrix_clean_new)[apply(adj_pval_matrix_clean_new[, cols] < 0.05, 1, all)]
+  sig_gene_sets[[grp]] <- sig_genes
+}
+```
+
+```{r}
+group_pairs <- combn(levels(stage), 2, simplify = FALSE)
+
+pairwise_intersections <- list()
+
+for (pair in group_pairs) {
+  group1 <- pair[1]
+  group2 <- pair[2]
+
+  common_genes <- intersect(sig_gene_sets[[group1]], sig_gene_sets[[group2]])
+
+  key <- paste(group1, group2, sep = "_vs_")
+  pairwise_intersections[[key]] <- common_genes
+}
+```
+
+```{r}
+# saveRDS(significant_genes, file = "SVG_across_all_new.rds")
+# saveRDS(pairwise_intersections, file = "SVG_all_group_intersection_new.rds")
+```
+
+```{r}
+# make the Contrl, EArly, AD, DSAD sets
+cluster_path <- "/home/bdsi2025/Genomics/Shared"
+sig_gene_sets_intersect <- readRDS((file.path(cluster_path, "SVG_all_group_intersection_new.rds")))
+```
+
+```{r}
+# CRINGE ASS VENDIAGRAM
+# install.packages("VennDiagram")
+library(VennDiagram)
+
+set1 <- sig_gene_sets[[1]]
+set2 <- sig_gene_sets[[4]]
+set3 <- sig_gene_sets[[2]]
+set4 <- sig_gene_sets[[3]]
+
+# Create a new graphics device (not required in RStudio but safe to include)
+grid.newpage()
+
+# Plot the Venn diagram
+draw.quad.venn(
+  area1 = length(set1),
+  area2 = length(set2),
+  area3 = length(set3),
+  area4 = length(set4),
+  n12 = length(intersect(set1, set2)),
+  n13 = length(intersect(set1, set3)),
+  n14 = length(intersect(set1, set4)),
+  n23 = length(intersect(set2, set3)),
+  n24 = length(intersect(set2, set4)),
+  n34 = length(intersect(set3, set4)),
+  n123 = length(Reduce(intersect, list(set1, set2, set3))),
+  n124 = length(Reduce(intersect, list(set1, set2, set4))),
+  n134 = length(Reduce(intersect, list(set1, set3, set4))),
+  n234 = length(Reduce(intersect, list(set2, set3, set4))),
+  n1234 = length(Reduce(intersect, list(set1, set2, set3, set4))),
+  category = c("AD", "Early", "Control", "DSAD"),
+  fill = c("skyblue", "pink", "lightgreen", "orange"),
+  lty = "solid",
+  cex = 1.2,
+  cat.cex = 1.2,
+  cat.col = "black"
+)
+```
+
+```{r}
+library(VennDiagram)
+library(grid)
+
+set1 <- sig_gene_sets[["Control"]]  
+set2 <- sig_gene_sets[["DSAD"]]    
+set3 <- sig_gene_sets[["Early"]]    
+set4 <- sig_gene_sets[["AD"]]       
+
+grid.newpage()
+
+draw.quad.venn(
+  area1 = length(set1),  # Control
+  area2 = length(set2),  # DSAD
+  area3 = length(set3),  # Early
+  area4 = length(set4),  # AD
+  n12 = length(intersect(set1, set2)),
+  n13 = length(intersect(set1, set3)),
+  n14 = length(intersect(set1, set4)),
+  n23 = length(intersect(set2, set3)),
+  n24 = length(intersect(set2, set4)),
+  n34 = length(intersect(set3, set4)),
+  n123 = length(Reduce(intersect, list(set1, set2, set3))),
+  n124 = length(Reduce(intersect, list(set1, set2, set4))),
+  n134 = length(Reduce(intersect, list(set1, set3, set4))),
+  n234 = length(Reduce(intersect, list(set2, set3, set4))),
+  n1234 = length(Reduce(intersect, list(set1, set2, set3, set4))),
+  category = c("Control", "DSAD", "Early", "AD"),
+  fill = c("skyblue", "pink", "lightgreen", "orange"),
+  lty = "solid",
+  cex = 1.2,
+  cat.cex = 1.2,
+  cat.col = "black"
+)
+```
+
+```{r}
+adj_pval_matrix_clean_MT_new <- adj_pval_matrix_clean_new[!grepl("MT-", rownames(adj_pval_matrix_clean_new)), ]
+sig_gene_sets_clean <- list()
+
+for (grp in levels(stage)) {
+  cols <- which(stage == grp)
+  sig_genes <- rownames(adj_pval_matrix_clean_MT_new)[apply(adj_pval_matrix_clean_MT_new[, cols] < 0.05, 1, all)]
+  sig_gene_sets_clean[[grp]] <- sig_genes
+}
+```
+
+```{r}
+# saveRDS(sig_gene_sets_clean, file = "sig_gene_sets_clean.rds")
+```
+
+```{r}
+gene_differences <- list()
+
+groups <- names(sig_gene_sets_clean)
+
+for (grp1 in groups) {
+  for (grp2 in groups) {
+    if (grp1 != grp2) {
+      comparison_name <- paste0(grp1, "_not_in_", grp2)
+      
+      diff_genes <- setdiff(sig_gene_sets_clean[[grp1]], sig_gene_sets_clean[[grp2]])
+      gene_differences[[comparison_name]] <- diff_genes
+      
+      all_in_grp1 <- all(diff_genes %in% sig_gene_sets_clean[[grp1]])
+      none_in_grp2 <- all(!diff_genes %in% sig_gene_sets_clean[[grp2]])
+      
+      if (!all_in_grp1 || !none_in_grp2) {
+        warning(paste("Sanity check failed for:", comparison_name))
+      }
+    }
+  }
+}
+```
+
+```{r}
+# saveRDS(gene_differences, file = "Groups_gene_differences.rds")
+```
+
+```{r}
+comparison_names <- names(gene_differences)
+gene_list <- gene_differences[[comparison_names[1]]]
+print(comparison_names[1])
+paste(gene_list, collapse = ", ")
+```
+
+```{r}
+# SCN1A 
+gene_to_plot <- "SCN1A"
+target_group <- c("AD", "Control")
+
+plot_list_t <- list()
+
+for (x in sample_names) {
+  for (y in gene_to_plot) {
+    coords_df <- as.data.frame(spatial_location[[x]])
+    meta <- (as.data.frame(spatial_count[[x]][y,]))
+    colnames(meta) <- "Expression"
+    graph <- cbind(meta, coords_df)
+  
+    p <- as.data.frame(graph) %>%
+      ggplot() +
+      aes(x = x, y = y, color = Expression) +
+      ggtitle("SCN1A Expression ",x) +
+      geom_point(size = 2.5) +
+      scale_color_viridis(option="plasma", direction = -1)
+    plot_list_t[[y]] <- p
+    print(p)
+  }
+  
+}
+```
+
+```{r}
+# SCN3A 
+gene_to_plot <- "SCN3A"
+target_group <- c("AD", "Control")
+
+plot_list_t <- list()
+
+for (x in sample_names) {
+  for (y in gene_to_plot) {
+    coords_df <- as.data.frame(spatial_location[[x]])
+    meta <- (as.data.frame(spatial_count[[x]][y,]))
+    colnames(meta) <- "Expression"
+    graph <- cbind(meta, coords_df)
+  
+    p <- as.data.frame(graph) %>%
+      ggplot() +
+      aes(x = x, y = y, color = Expression) +
+      ggtitle("SCN3A Expression ", x) +
+      geom_point(size = 2.5) +
+      scale_color_viridis(option="plasma", direction = -1)
+    plot_list_t[[y]] <- p
+    print(p)
+  }
+  
+}
+```
+
+```{r}
+# SCN3A 
+gene_to_plot <- "RERE"
+target_group <- c("AD", "Control")
+
+plot_list_t <- list()
+
+for (x in sample_names) {
+  for (y in gene_to_plot) {
+    coords_df <- as.data.frame(spatial_location[[x]])
+    meta <- (as.data.frame(spatial_count[[x]][y,]))
+    colnames(meta) <- "Expression"
+    graph <- cbind(meta, coords_df)
+  
+    p <- as.data.frame(graph) %>%
+      ggplot() +
+      aes(x = x, y = y, color = Expression) +
+      ggtitle("SCN3A Expression ", x) +
+      geom_point(size = 2.5) +
+      scale_color_viridis(option="plasma", direction = -1)
+    plot_list_t[[y]] <- p
+    print(p)
+  }
+  
+}
+```
+
+```{r}
+comparison_names <- names(gene_differences)
+gene_list <- gene_differences[[comparison_names[4]]]
+print(comparison_names[4])
+paste(gene_list, collapse = ", ")
+```
+
+```{r}
+
+```
+
+```{r}
+# PARK7  
+gene_to_plot <- "PARK7"
+target_group <- c("AD", "Control")
+
+plot_list_t <- list()
+
+for (x in sample_names) {
+  for (y in gene_to_plot) {
+    coords_df <- as.data.frame(spatial_location[[x]])
+    meta <- (as.data.frame(spatial_count[[x]][y,]))
+    colnames(meta) <- "Expression"
+    graph <- cbind(meta, coords_df)
+  
+    p <- as.data.frame(graph) %>%
+      ggplot() +
+      aes(x = x, y = y, color = Expression) +
+      ggtitle("SCN3A Expression ", x) +
+      geom_point(size = 2.5) +
+      scale_color_viridis(option="plasma", direction = -1)
+    plot_list_t[[y]] <- p
+    print(p)
+  }
+  
+}
+```
+
+```{r}
+# Cauchy RV
+CombinePValues <- function(pvalues, weights=NULL){
+	if(!is.matrix(pvalues)){pvalues <- as.matrix(pvalues)}
+	## to avoid extremely values
+	pvalues[which(pvalues==0)] <- 5.55e-17
+	pvalues[which((1-pvalues)<1e-3)] <- 0.99
+	
+	num_pval <- ncol(pvalues)
+	num_gene <- nrow(pvalues)
+	if(is.null(weights)){
+		weights <- matrix(rep(1.0/num_pval, num_pval*num_gene), ncol=num_pval )
+	}# end fi
+	if( (nrow(weights) != num_gene) || (ncol(weights) != num_pval)){
+		stop("the dimensions of weights does not match that of combined pvalues")
+	}# end fi
+	
+	Cstat <- tan((0.5 - pvalues)*pi)
+	wCstat <- weights*Cstat
+	Cbar <- apply(wCstat, 1, sum)
+	#combined_pval <- 1.0/2.0 - atan(Cbar)/pi
+	combined_pval <- 1.0 - pcauchy(Cbar)	
+	combined_pval[which(combined_pval <= 0)] <- 5.55e-17
+	return(combined_pval)
+}
+```
+
+```{r}
+group_list <- list(
+  Control = sample_names[stage == "Control"],
+  Early   = sample_names[stage == "Early"],
+  AD      = sample_names[stage == "AD"],
+  DSAD    = sample_names[stage == "DSAD"]
+)
+
+combined_by_group <- list()
+
+for (group in names(group_list)) {
+  # cat("Processing group:", group, "\n")
+
+  sample_subset <- group_list[[group]]
+  pval_subset <- adj_pval_matrix_clean_MT_new[, sample_subset, drop = FALSE]
+
+  combined_pvals <- CombinePValues(pval_subset)
+  
+  combined_by_group[[group]] <- combined_pvals
+}
+
+cauchy_combined_df <- do.call(cbind, combined_by_group)
+rownames(cauchy_combined_df) <- rownames(adj_pval_matrix_clean_MT_new)
+
+head(cauchy_combined_df)
+```
+
+```{r}
+cauchy_significant_genes_sets <- list()
+
+for (group in colnames(cauchy_combined_df)) {
+  sig_genes <- rownames(cauchy_combined_df)[cauchy_combined_df[, group] < .05]
+  cauchy_significant_genes_sets[[group]] <- sig_genes
+}
+```
+
+```{r}
+set1 <- cauchy_significant_genes_sets[["Control"]]  
+set2 <- cauchy_significant_genes_sets[["DSAD"]]    
+set3 <- cauchy_significant_genes_sets[["Early"]]    
+set4 <- cauchy_significant_genes_sets[["AD"]]       
+
+grid.newpage()
+
+draw.quad.venn(
+  area1 = length(set1),  # Control
+  area2 = length(set2),  # DSAD
+  area3 = length(set3),  # Early
+  area4 = length(set4),  # AD
+  n12 = length(intersect(set1, set2)),
+  n13 = length(intersect(set1, set3)),
+  n14 = length(intersect(set1, set4)),
+  n23 = length(intersect(set2, set3)),
+  n24 = length(intersect(set2, set4)),
+  n34 = length(intersect(set3, set4)),
+  n123 = length(Reduce(intersect, list(set1, set2, set3))),
+  n124 = length(Reduce(intersect, list(set1, set2, set4))),
+  n134 = length(Reduce(intersect, list(set1, set3, set4))),
+  n234 = length(Reduce(intersect, list(set2, set3, set4))),
+  n1234 = length(Reduce(intersect, list(set1, set2, set3, set4))),
+  category = c("Control", "DSAD", "Early", "AD"),
+  fill = c("skyblue", "pink", "lightgreen", "orange"),
+  lty = "solid",
+  cex = 1.2,
+  cat.cex = 1.2,
+  cat.col = "black"
+)
+```
+
+```{r}
+cauchy_gene_differences <- list()
+
+groups <- names(cauchy_significant_genes_sets)
+
+for (grp1 in groups) {
+  for (grp2 in groups) {
+    if (grp1 != grp2) {
+      comparison_name <- paste0(grp1, "_not_in_", grp2)
+      
+      diff_genes <- setdiff(cauchy_significant_genes_sets[[grp1]], cauchy_significant_genes_sets[[grp2]])
+      cauchy_gene_differences[[comparison_name]] <- diff_genes
+      
+      all_in_grp1 <- all(diff_genes %in% cauchy_significant_genes_sets[[grp1]])
+      none_in_grp2 <- all(!diff_genes %in% cauchy_significant_genes_sets[[grp2]])
+      
+      if (!all_in_grp1 || !none_in_grp2) {
+        warning(paste("Sanity check failed for:", comparison_name))
+      }
+    }
+  }
+}
+```
+
+```{r}
+# saveRDS(cauchy_gene_differences, file = "Cauchy_Groups_gene_differences.rds")
+# saveRDS(cauchy_significant_genes_sets, file = "Cauchy_significant_genes_sets.rds")
+```
+
+```{r}
+comparison_names <- names(cauchy_gene_differences)
+gene_list <- cauchy_gene_differences[[comparison_names[4]]]
+print(comparison_names[4])
+paste(gene_list, collapse = ", ")
+```
+
+```{r}
+gene_to_plot <- "MBP"
+target_group <- c("AD", "Control")
+
+plot_list_t <- list()
+
+for (x in sample_names) {
+  for (y in gene_to_plot) {
+    coords_df <- as.data.frame(spatial_location[[x]])
+    meta <- as.data.frame(spatial_count[[x]][y, ])
+    colnames(meta) <- "Expression"
+    graph <- cbind(meta, coords_df)
+    
+    # Order to plot low first, high on top
+    graph <- graph %>% arrange(Expression)
+
+    # Get custom reversed plasma palette
+    reversed_palette <- rev(viridis(100, option = "plasma"))
+
+    # Create the plot
+    p <- ggplot(graph, aes(x = x, y = y, color = Expression)) +
+      geom_point(size = 2.5) +
+      scale_color_gradientn(
+        colours = c("white", reversed_palette),
+        limits = c(0, max(graph$Expression, na.rm = TRUE)),
+        na.value = "white"
+      ) +
+      ggtitle(paste(y, "Expression in", x)) +
+      theme_gray()
+
+    plot_list_t[[y]] <- p
+    print(p)
+  }
+}
+```
+
+```{r}
+#Cauchy Slide visual
+gene_to_plot <- "KCNN4"  # change to your gene of interest
+
+# Create the data frame
+gene_pval_df <- data.frame(
+  Sample = colnames(adj_pval_matrix_clean_MT_new),
+  P_Value = as.numeric(adj_pval_matrix_clean_MT_new[gene_to_plot, ])
+)
+
+head(gene_pval_df)
+```
+
+```{r}
+# Get Cauchy combined P value for the gene from each group
+cauchy_combined_vals <- cauchy_combined_df[gene_to_plot, ]
+
+print(cauchy_combined_vals)
+```
+
+```{r}
+
+```
+
+```{r}
+calc_cauchy <- function(pvals) {
+  pvals[pvals == 0] <- 5.55e-17
+  pvals[(1 - pvals) < 1e-3] <- 0.99
+  cauchy_stats <- tan((0.5 - pvals) * pi)
+  Cbar <- sum(cauchy_stats)
+  combined_p <- 1 - pcauchy(Cbar)
+  combined_p <- ifelse(combined_p <= 0, 5.55e-17, combined_p)
+  return(list(Cbar = Cbar, combined_p = combined_p))
+}
+
+# Your gene of interest
+gene_to_plot <- "KCNN4"
+
+# Initialize output data frame
+results <- data.frame(
+  Group = character(),
+  Cbar = numeric(),
+  Combined_P = numeric(),
+  stringsAsFactors = FALSE
+)
+
+for (group in names(group_list)) {
+  samples_in_group <- group_list[[group]]
+  
+  # Extract p-values for this gene and group
+  pvals_group <- adj_pval_matrix_clean_MT_new[gene_to_plot, samples_in_group]
+  
+  # Calculate Cbar and combined p-value
+  res <- calc_cauchy(as.numeric(pvals_group))
+  
+  # Append results
+  results <- rbind(results, data.frame(
+    Group = group,
+    Cbar = res$Cbar,
+    Combined_P = res$combined_p
+  ))
+}
+
+print(results)
+```
+
+```{r}
+Cbar <- -2.078365e+01	  # this is the result of your Cauchy combination
+
+# Cauchy distribution: x from -10 to 10
+x_vals <- seq(-10, 10, length.out = 1000)
+y_vals <- dcauchy(x_vals)
+
+df <- data.frame(x = x_vals, y = y_vals)
+
+# Plot
+ggplot(df, aes(x = x, y = y)) +
+  geom_line(color = "black", size = 1) +  # Cauchy distribution
+  geom_vline(xintercept = Cbar, color = "red", linetype = "dashed", size = 1) +  # Your test stat
+  annotate("text", x = Cbar + 0.5, y = 0.05, label = paste0("Cbar = ", round(Cbar, 2)),
+           color = "red", hjust = 0) +
+  labs(
+    title = "Cauchy Distribution with Test Statistic",
+    x = "x",
+    y = "Density"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+human_cp <- c(
+  "WM1" = "#64BCDB", "WM2" = "#62A7D7", "WM3" = "#99C8D7",
+  "L1" = "#8B3D5A", "L2/3" = "#E7BDE1", "L3/4" = "#E6A4CD",
+  "L3/4/5" = "#CF8BA3", "L5/6" = "#9E6D7F", "L6b" = "#CDAEB9"
+)
+```
+
+```{r}
+gene_to_plot <- "IFI35"
+target_group <- c("AD", "Control")
+
+plot_list_t <- list()
+
+for (x in sample_names) {
+  for (y in gene_to_plot) {
+    
+    # Coordinates
+    coords_df <- as.data.frame(spatial_location[[x]])
+    
+    # Expression
+    meta_expr <- as.data.frame(spatial_count[[x]][y, ])
+    colnames(meta_expr) <- "Expression"
+    
+    # Annotation
+    annotation_df <- as.data.frame(meta_list[[x]])
+    
+    # Combine
+    graph <- cbind(meta_expr, annotation_df, coords_df)
+    graph <- graph %>% arrange(Expression)
+    
+    # Ensure annotation is a factor
+    graph$annotation <- factor(graph$annotation)
+
+    # Reversed plasma palette
+    reversed_palette <- rev(viridis(100, option = "plasma"))
+
+    # Plot
+    p <- ggplot(graph, aes(x = x, y = y)) +
+
+      # Annotation background: make alpha smaller and visibly behind
+      geom_point(
+        data = graph,
+        aes(x = x, y = y, fill = annotation),
+        shape = 21, color = "gray90", size = 4, alpha = 0.25, stroke = 0.1
+      ) +
+      scale_fill_manual(values = human_cp, guide = "none") +
+
+      # Foreground expression layer
+      geom_point(
+        data = graph,
+        aes(x = x, y = y, color = Expression),
+        size = 2.2
+      ) +
+      scale_color_gradientn(
+        colours = c("transparent", reversed_palette),
+        limits = c(0, max(graph$Expression, na.rm = TRUE)),
+        na.value = "transparent"
+      ) +
+
+      ggtitle(paste(y, "Expression in", x)) +
+      theme_gray()
+
+    plot_list_t[[paste0(x, "_", y)]] <- p
+    print(p)
+  }
+}
+
+
+```
+
+```{r}
+set1 <- cauchy_significant_genes_sets[["Control"]]
+set2 <- cauchy_significant_genes_sets[["Early"]]  
+set3 <- cauchy_significant_genes_sets[["AD"]]   
+
+grid.newpage()
+
+draw.triple.venn(
+  area1 = length(set1),
+  area2 = length(set2),
+  area3 = length(set3),
+  n12 = length(intersect(set1, set2)),
+  n13 = length(intersect(set1, set3)),
+  n23 = length(intersect(set2, set3)),
+  n123 = length(Reduce(intersect, list(set1, set2, set3))),
+  category = c("Control", "Early", "AD"),
+  fill = c("skyblue", "lightgreen", "orange"),
+  lty = "solid",
+  cex = 1.2,
+  cat.cex = 1.8,
+  cat.col = "black"
+)
+```
